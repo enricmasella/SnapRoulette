@@ -1,77 +1,78 @@
 # SnapRoulette
 
-Party game web multijugador en tiempo real. Cada jugador sube sus propias fotos y vídeos desde su
-dispositivo, la sala mezcla las pools de todos, y hay que adivinar de quién es cada medio antes de
-que desaparezca. Puntos por acierto + velocidad.
+Un juego rápido para picarte con tus amigos: cada uno conecta su móvil a la misma sala, sube unas cuantas fotos o vídeos de su carrete (o deja que el juego elija una carpeta al azar), y se mezclan todas. En cada ronda sale una en pantalla y tienes pocos segundos para adivinar de quién es. Cuanto más rápido aciertes, más puntos sumas.
 
-- **Modos**: fotos · vídeos · mixto
-- **Rondas configurables** (3-20) y **duración por ronda** (3-15 s) desde el lobby
-- **2-10 jugadores** en sala privada por código (5 caracteres)
-- Rejugabilidad inmediata: "Jugar de nuevo" regenera pools, sin recrear la sala
+## Cómo va una partida
 
-## Estructura
+1. Creas una sala o entras con un código de 5 letras (o pasando directamente el enlace de la sala).
+2. Eliges qué entra en juego: solo fotos, solo vídeos o modo mixto, y cuántas rondas queréis.
+3. Cada jugador prepara su lote. Puedes darle acceso a una carpeta para que saque fotos aleatorias de tu carrete o elegir archivos a mano desde el móvil.
+4. Empieza la partida: foto en pantalla, cuenta atrás y botones con los nombres de todos para votar.
+5. Al terminar, podéis darle a revancha directa sin tener que volver a montar la sala.
 
-- `packages/shared` — tipos y schemas zod compartidos (contrato cliente/servidor)
-- `apps/server` — Node + TypeScript + Socket.IO (salas, pools, rondas, puntuación, rate limiting)
-- `apps/client` — React + Vite + Tailwind 4 (UI mobile-first)
+## Cómo está montado
 
-## Requisitos
+El proyecto es un monorepo con TypeScript dividido en tres partes:
 
-- Node 20+
-- Sin variables de entorno obligatorias para desarrollo.
+- `packages/shared`: los tipos, esquemas de Zod y los eventos que viajan por Socket.IO.
+- `apps/server`: servidor con Node.js, Express y Socket.IO. Lleva el estado de las salas, los turnos, las puntuaciones y guarda las fotos en memoria mientras dura la partida.
+- `apps/client`: web hecha con React, Vite y Tailwind CSS, pensada para usarse cómoda en el móvil.
+- `tools/`: un bot en Node para simular jugadores y probar partidas en local sin necesitar cuatro teléfonos a la vez.
 
-## Desarrollo
+## Ponerlo a rodar en local
+
+Necesitas Node.js 20 o superior.
 
 ```bash
+# Instalar dependencias
 npm install
-npm run dev        # server :3001 + client :5173 (concurrently)
-npm run typecheck  # todos los workspaces
-npm test           # tests (vitest)
-npm run lint       # biome check
-npm run bot -- ABCDE  # jugador simulado contra una sala local (ver tools/README.md)
+
+# Levantar servidor (:3001) y cliente (:5173) a la vez
+npm run dev
 ```
 
-## Seguridad del servidor
+Entras en `http://localhost:5173` y ya puedes crear sala o unirte.
 
-- **Sniffing de magic bytes** en cada upload: se detecta el tipo real del archivo por firma binaria
-  (JPEG, PNG, GIF, WebP, MP4, WebM, MOV, AVIF) y se valida contra el `kind` declarado por el cliente.
-  El `Content-Type` lo deriva el servidor; el del cliente se ignora (bloquea XSS vía `data:text/html`).
-- **Rate limiting por IP** (sliding window en memoria) en creación/unión de salas y uploads, más
-  límite global de salas activas (`MAX_ROOMS`).
-- **Límites de tamaño**: por archivo (`MAX_UPLOAD_BYTES`), por esquema zod (base64), y total en el
-  almacén de medios (`MAX_MEDIA_STORE_BYTES`, 200 MB en memoria). Cada archivo viaja en su propio
-  evento `upload_item` con ACK, así que el buffer del socket (~35 MB) no crece con el pool entero.
-- **`X-Content-Type-Options: nosniff`** en todas las respuestas de medios.
-- Los medios subidos se liberan al abandonar la sala, al destruirse y al empezar una revancha;
-  si todos se desconectan la sala se destruye en el acto (sin fugas hasta `MAX_ROOMS`).
+Otros comandos habituales:
 
-## Variables de entorno
+```bash
+# Revisar formato y linter
+npm run lint
 
-| Variable | Default | Descripción |
-|---|---|---|
-| `PORT` | `3001` | Puerto del servidor |
-| `CORS_ORIGIN` | `*` | Origen permitido para socket.io |
-| `CLIENT_DIST` | `../client/dist` | Ruta al build del cliente (solo producción) |
-| `TRUST_PROXY` | `0` | `1` si hay un proxy delante: usa `X-Forwarded-For` para el rate limit por IP |
+# Comprobar tipos en todo el proyecto
+npm run typecheck
 
-## Producción
+# Correr los tests
+npm test
+
+# Meter un bot a una sala para probar
+npm run bot -- CODIGO
+```
+
+## Detalles del servidor
+
+- **Cero archivos en disco:** Las fotos y vídeos se guardan solo en la memoria RAM del servidor mientras la sala está viva. Si la sala se cierra o la gente se va, se limpian solas.
+- **Comprobación real de archivos:** El servidor no se fía de la extensión que diga el navegador; mira los primeros bytes de cada archivo para confirmar que de verdad es una imagen o un vídeo válido.
+- **Subidas controladas:** Cada foto se sube por separado con confirmación (ACK) para no saturar el canal del socket con paquetes gigantes.
+- **Reconexión:** Si se te apaga la pantalla, se corta la red o recargas sin querer a mitad de partida, puedes volver a meter tu nombre y el código de la sala para reengancharte a la ronda en curso.
+
+## Despliegue y producción
+
+Para compilar y arrancar:
 
 ```bash
 npm run build
 npm start
 ```
 
-También puedes iniciar directamente el bundle generado:
-
-```bash
-node apps/server/dist/index.js
-```
-
-Para ejecutar el servicio con Docker:
+O con Docker:
 
 ```bash
 docker compose up --build
 ```
 
-En producción, el servidor sirve el build del cliente desde `apps/client/dist` (o la ruta indicada
-por `CLIENT_DIST`).
+### Variables de entorno (opcionales)
+
+- `PORT`: puerto donde escucha el servidor (por defecto `3001`).
+- `CORS_ORIGIN`: dominios permitidos para Socket.IO (por defecto `*`).
+- `TRUST_PROXY`: ponlo a `1` si tienes un proxy delante (Nginx, Cloudflare, etc.) para que el control de conexiones use la IP real del usuario.
