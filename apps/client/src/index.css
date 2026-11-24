@@ -1,0 +1,62 @@
+@import "tailwindcss";
+
+@theme {
+  --color-night: #0b0d10;
+  --color-surface: #141824;
+  --color-surface-2: #1b2233;
+  --color-line: #2a3148;
+  --color-ink: #f2f4f0;
+  --color-muted: #9aa3b5;
+  --color-lime: #c8f542;
+  --color-lime-strong: #e6ffa3;
+  --color-danger: #ff5c5c;
+  --font-display: "Space Grotesk", system-ui, sans-serif;
+  --font-body: "Inter", system-ui, sans-serif;
+}
+
+@layer base {
+  html {
+    background-color: var(--color-night);
+    color: var(--color-ink);
+    font-family: var(--font-body);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  body {
+    margin: 0;
+    min-height: 100dvh;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-lime);
+    outline-offset: 2px;
+    border-radius: 6px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+/* Countdown de ronda: funcional (tiempo límite), se conserva con reduced-motion */
+.countdown-bar {
+  transform-origin: left;
+  animation-name: countdown-shrink;
+  animation-timing-function: linear;
+  animation-fill-mode: forwards;
+}
+
+@keyframes countdown-shrink {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
+}
