@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 
 import { ROUND_DURATION_MS, computeVideoPlaybackRate } from "@snaproulette/shared";
 
@@ -14,11 +14,13 @@ interface GameScreenProps {
 export function GameScreen({ game, round }: GameScreenProps) {
   const now = useNow(250);
   const [guessedId, setGuessedId] = useState<string | null>(null);
+  const [prevItemId, setPrevItemId] = useState(round.item.id);
   const [mediaError, setMediaError] = useState(false);
 
-  useEffect(() => {
+  if (prevItemId !== round.item.id) {
+    setPrevItemId(round.item.id);
     setMediaError(false);
-  }, [round.item.id]);
+  }
 
   const { room, myId, reveal } = game;
   if (room === null || myId === null) return null;
@@ -86,7 +88,9 @@ export function GameScreen({ game, round }: GameScreenProps) {
       {round.isOwner && (
         <section className="px-4 pb-2 text-center">
           <p className="font-display text-base font-semibold text-lime">👀 Es TU medio</p>
-          <p className="mt-0.5 text-xs text-muted">Vota por ti para puntuar, ¡o por otro para despistar!</p>
+          <p className="mt-0.5 text-xs text-muted">
+            Vota por ti para puntuar, ¡o por otro para despistar!
+          </p>
         </section>
       )}
 

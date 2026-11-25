@@ -264,9 +264,7 @@ export function PoolReviewScreen({ game }: { game: SnapGame }) {
       {!submitted ? (
         photoPool.status === "denied" ? (
           <section className="flex flex-col items-center gap-4 py-8">
-            <p className="text-center text-base font-semibold text-danger">
-              😔 No hay permisos
-            </p>
+            <p className="text-center text-base font-semibold text-danger">😔 No hay permisos</p>
             <p className="text-center text-sm text-muted">
               Necesitamos acceso a tus {modeNoun} para poder jugar. Haz click en el botón para
               volver a intentarlo.
