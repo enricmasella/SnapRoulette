@@ -127,7 +127,7 @@ function isAbortError(error: unknown): boolean {
 }
 
 function notEnoughMessage(size: number, found: number): string {
-  return `No hay suficientes archivos en la carpeta: se necesitan ${size} y solo hay ${found}.`;
+  return `No hay suficientes fotos/vídeos: se necesitan ${size} y solo hay ${found}.`;
 }
 
 /** Fisher-Yates sobre una copia: devuelve `size` archivos al azar. */
@@ -288,44 +288,52 @@ export function usePhotoPool({ size, accept, mode }: PhotoPoolOptions): PhotoPoo
   }, [openFallback]); // grant se definirá abajo, o grant se usa aquí
 
   const grant = useCallback(async (): Promise<void> => {
-    const picker = pickDirectoryIfPossible();
-    if (picker === null) {
-      openFallback();
-      return;
-    }
-    setState((prev) => ({ ...prev, status: "granting", error: null }));
-    let dir: FileSystemDirectoryHandle;
-    try {
-      dir = await picker.call(window, { mode: "read" });
-    } catch (error) {
-      if (isAbortError(error)) {
-        // El jugador cerró el selector sin elegir carpeta → marcamos como denegado.
-        setState((prev) => ({ ...prev, status: "denied", error: null }));
+    // Primero intentamos el selector de galería/archivos multimedia
+    const openFiles = pickFilesIfPossible();
+    if (openFiles !== null) {
+      setState((prev) => ({ ...prev, status: "granting", error: null }));
+      try {
+        const handles = await openFiles.call(window, {
+          multiple: true,
+          types: [
+            {
+              description: "Fotos y vídeos",
+              accept: {
+                "image/*": [".png", ".gif", ".jpeg", ".jpg", ".webp", ".heic", ".heif"],
+                "video/*": [".mp4", ".webm", ".ogg", ".mov"],
+              },
+            },
+          ],
+        });
+        if (handles.length === 0) {
+          setState((prev) => ({ ...prev, status: "denied", error: null }));
+          return;
+        }
+        setState((prev) => ({ ...prev, status: "reading" }));
+        const files: File[] = [];
+        for (const h of handles) {
+          try {
+            const f = await h.getFile();
+            if (isSupportedMedia(f.name, optsRef.current.mode)) {
+              files.push(f);
+            }
+          } catch {
+            // ignorar fallos de lectura individuales
+          }
+        }
+        selectFrom(files);
         return;
+      } catch (error) {
+        if (isAbortError(error)) {
+          setState((prev) => ({ ...prev, status: "denied", error: null }));
+          return;
+        }
+        // Si falla por cualquier otra razón, caemos a fallback
       }
-      setState((prev) => ({
-        ...prev,
-        status: "error",
-        error: `No se pudo abrir la carpeta: ${errorMessage(error)}`,
-      }));
-      return;
     }
-    setState((prev) => ({ ...prev, status: "reading" }));
-    try {
-      await storeDirHandle(dir);
-    } catch {
-      // Persistencia es best-effort: seguimos leyendo aunque IndexedDB falle.
-    }
-    try {
-      selectFrom(await readAllMedia(dir, optsRef.current.mode));
-    } catch (error) {
-      setState((prev) => ({
-        ...prev,
-        status: "error",
-        error: `No se pudo leer la carpeta: ${errorMessage(error)}`,
-      }));
-    }
-  }, [openFallback, selectFrom]);
+    // Fallback estándar en móviles / navegadores sin showOpenFilePicker:
+    openFilesPicker();
+  }, [openFilesPicker, selectFrom]);
 
   const ingest = useCallback(
     (files: File[], merge = false): void => {
