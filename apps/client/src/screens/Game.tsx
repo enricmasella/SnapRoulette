@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 import { ROUND_DURATION_MS, computeVideoPlaybackRate } from "@snaproulette/shared";
 
@@ -14,13 +14,18 @@ interface GameScreenProps {
 export function GameScreen({ game, round }: GameScreenProps) {
   const now = useNow(250);
   const [guessedId, setGuessedId] = useState<string | null>(null);
+  const [mediaError, setMediaError] = useState(false);
+
+  useEffect(() => {
+    setMediaError(false);
+  }, [round.item.id]);
 
   const { room, myId, reveal } = game;
   if (room === null || myId === null) return null;
 
   const remaining = Math.max(0, Math.ceil((round.targetTs - now) / 1000));
   const timeUp = now >= round.targetTs;
-  const guessable = room.players.filter((p) => p.id !== myId);
+  const guessable = room.players;
 
   return (
     <div className="flex min-h-dvh flex-col">
@@ -46,7 +51,11 @@ export function GameScreen({ game, round }: GameScreenProps) {
       </div>
 
       <div className="flex min-h-0 flex-1 items-center justify-center px-4 py-3">
-        {round.item.kind === "video" ? (
+        {mediaError ? (
+          <div className="flex max-h-[50dvh] w-full items-center justify-center rounded-2xl bg-surface-2 text-muted">
+            <p className="text-center">No se pudo cargar el medio</p>
+          </div>
+        ) : round.item.kind === "video" ? (
           <video
             key={round.item.id}
             src={round.item.url}
@@ -61,28 +70,33 @@ export function GameScreen({ game, round }: GameScreenProps) {
                 game.room !== null ? game.room.config.roundDurationMs : ROUND_DURATION_MS,
               );
             }}
+            onError={() => setMediaError(true)}
             className="max-h-[50dvh] w-full rounded-2xl object-contain"
           />
         ) : (
           <img
             src={round.item.url}
             alt="Medio a adivinar"
+            onError={() => setMediaError(true)}
             className="max-h-[50dvh] w-full rounded-2xl object-contain"
           />
         )}
       </div>
 
-      {round.isOwner ? (
-        <section className="px-4 pb-8 pt-1 text-center">
+      {round.isOwner && (
+        <section className="px-4 pb-2 text-center">
           <p className="font-display text-base font-semibold text-lime">👀 Es TU medio</p>
-          <p className="mt-1 text-sm text-muted">Quédate callado mientras adivinan…</p>
+          <p className="mt-0.5 text-xs text-muted">Vota por ti para puntuar, ¡o por otro para despistar!</p>
         </section>
-      ) : reveal === null ? (
+      )}
+
+      {reveal === null ? (
         <section className="px-4 pb-8 pt-1">
           <p className="mb-2 text-center text-sm font-medium text-muted">¿De quién es?</p>
           <div className="grid grid-cols-2 gap-2">
             {guessable.map((p) => {
               const disabled = timeUp || reveal !== null || guessedId !== null;
+              const isMe = p.id === myId;
               return (
                 <button
                   key={p.id}
@@ -99,7 +113,9 @@ export function GameScreen({ game, round }: GameScreenProps) {
                   }`}
                 >
                   <Avatar emoji={p.avatar} size="sm" />
-                  <span className="truncate text-sm font-semibold text-ink">{p.name}</span>
+                  <span className="truncate text-sm font-semibold text-ink">
+                    {p.name} {isMe && "(tú)"}
+                  </span>
                 </button>
               );
             })}
