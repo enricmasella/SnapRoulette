@@ -208,7 +208,7 @@ export function PoolReviewScreen({ game }: { game: SnapGame }) {
     photoPool.status === "granting"
       ? "Pidiendo acceso a tus fotos…"
       : photoPool.status === "reading"
-        ? "Leyendo tu carpeta…"
+        ? "Cargando tus fotos…"
         : "Preparando tu pool…";
 
   const onFallbackFiles = (event: ChangeEvent<HTMLInputElement>) => {
@@ -257,7 +257,7 @@ export function PoolReviewScreen({ game }: { game: SnapGame }) {
             ? "Se subirán a la partida y podrán caer en las rondas."
             : preview !== null
               ? `Tu pool de ${required} ${modeNoun}. Todavía no se ha subido nada: cuando te gusten, entra con ellas.`
-              : `Da acceso a tus fotos y elegiremos ${required} ${modeNoun} de tu dispositivo al azar.`}
+              : `Da acceso a tus fotos y elegiremos ${required} ${modeNoun} de tu galería al azar.`}
         </p>
       </section>
 
@@ -271,10 +271,10 @@ export function PoolReviewScreen({ game }: { game: SnapGame }) {
             </p>
             <div className="flex w-full flex-col gap-3">
               <Button onClick={photoPool.grant} className="w-full">
-                🔄 Clicka aquí para dar permisos
+                🔄 Clicka aquí para dar acceso a tu galería
               </Button>
-              <Button variant="ghost" onClick={photoPool.openFilesPicker} className="w-full">
-                📸 O elige {modeNoun} directamente
+              <Button variant="ghost" onClick={photoPool.openFolderPicker} className="w-full">
+                📁 O elige una carpeta
               </Button>
             </div>
           </section>
@@ -334,15 +334,15 @@ export function PoolReviewScreen({ game }: { game: SnapGame }) {
           <section className="flex flex-col items-center gap-4 py-8">
             <div className="flex w-full flex-col gap-3">
               <Button onClick={photoPool.grant} className="w-full">
-                📁 Dar acceso a una carpeta
+                📸 Conectar galería de fotos
               </Button>
-              <Button variant="ghost" onClick={photoPool.openFilesPicker} className="w-full">
-                📸 Elegir fotos / vídeos del dispositivo
+              <Button variant="ghost" onClick={photoPool.openFolderPicker} className="w-full">
+                📁 O elegir una carpeta
               </Button>
             </div>
             <p className="text-center text-xs text-muted">
-              Puedes dar acceso a una carpeta para que el juego elija {required} {modeNoun} al azar,
-              o seleccionar archivos directamente desde tu galería. Solo se suben las que aceptes.
+              Selecciona fotos de tu galería para jugar (como en Photo Roulette). Elegiremos{" "}
+              {required} {modeNoun} al azar. Solo se suben las que aceptes.
             </p>
             {photoPool.error !== null && (
               <p className="text-center text-sm text-danger">{photoPool.error}</p>
