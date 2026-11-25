@@ -262,7 +262,25 @@ export function PoolReviewScreen({ game }: { game: SnapGame }) {
       </section>
 
       {!submitted ? (
-        photoPool.status === "granting" || photoPool.status === "reading" ? (
+        photoPool.status === "denied" ? (
+          <section className="flex flex-col items-center gap-4 py-8">
+            <p className="text-center text-base font-semibold text-danger">
+              😔 No hay permisos
+            </p>
+            <p className="text-center text-sm text-muted">
+              Necesitamos acceso a tus {modeNoun} para poder jugar. Haz click en el botón para
+              volver a intentarlo.
+            </p>
+            <div className="flex w-full flex-col gap-3">
+              <Button onClick={photoPool.grant} className="w-full">
+                🔄 Clicka aquí para dar permisos
+              </Button>
+              <Button variant="ghost" onClick={photoPool.openFilesPicker} className="w-full">
+                📸 O elige {modeNoun} directamente
+              </Button>
+            </div>
+          </section>
+        ) : photoPool.status === "granting" || photoPool.status === "reading" ? (
           <section className="flex flex-col items-center gap-3 py-10">
             <Spinner />
             <p className="text-sm text-muted">{busyCopy}</p>

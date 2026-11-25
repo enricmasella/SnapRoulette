@@ -31,7 +31,7 @@ declare global {
   }
 }
 
-export type PhotoPoolStatus = "idle" | "granting" | "reading" | "ready" | "error";
+export type PhotoPoolStatus = "idle" | "denied" | "granting" | "reading" | "ready" | "error";
 export type PhotoPoolMode = "photos" | "videos" | "mixed";
 
 export interface PhotoPoolOptions {
@@ -299,8 +299,8 @@ export function usePhotoPool({ size, accept, mode }: PhotoPoolOptions): PhotoPoo
       dir = await picker.call(window, { mode: "read" });
     } catch (error) {
       if (isAbortError(error)) {
-        // El jugador cerró el selector: no es un error, volvemos a pedir permiso.
-        setState((prev) => ({ ...prev, status: "idle" }));
+        // El jugador cerró el selector sin elegir carpeta → marcamos como denegado.
+        setState((prev) => ({ ...prev, status: "denied", error: null }));
         return;
       }
       setState((prev) => ({
