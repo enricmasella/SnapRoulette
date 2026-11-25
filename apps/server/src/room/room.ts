@@ -136,34 +136,47 @@ export class RoomManager {
     const room = this.rooms.get(input.code);
     if (room === undefined) throw new RoomError("Sala no encontrada");
 
-    // Si la partida ya empezó, permitir reconexión si un jugador desconectado coincide en nombre
-    if (room.phase !== "lobby") {
-      const disconnected = [...room.players.values()].find(
-        (p) => !p.connected && p.name.trim().toLowerCase() === input.name.trim().toLowerCase(),
-      );
-      if (disconnected !== undefined) {
-        disconnected.connected = true;
-        disconnected.socketId = socket.id;
-        this.socketRoom.set(socket.id, room.code);
-        socket.join(room.code);
-        socket.emit("your_id", { playerId: disconnected.id });
-        this.broadcastState(room);
-        if (room.phase === "playing") {
-          const currentRound = room.rounds[room.roundIndex];
-          if (currentRound !== undefined) {
-            socket.emit("round_start", {
-              index: room.roundIndex,
-              totalRounds: room.rounds.length,
-              item: currentRound.item,
-              targetTs: room.roundTargetTs,
-            });
-            if (currentRound.ownerId === disconnected.id) {
-              socket.emit("you_are_owner", { index: room.roundIndex });
-            }
+    // Reconexión: buscar jugador por id (si viene informado) o por nombre desconectado
+    const existing = [...room.players.values()].find(
+      (p) =>
+        (input.playerId !== undefined && p.id === input.playerId) ||
+        (!p.connected && p.name.trim().toLowerCase() === input.name.trim().toLowerCase()),
+    );
+
+    if (existing !== undefined) {
+      if (existing.socketId !== undefined) {
+        this.socketRoom.delete(existing.socketId);
+      }
+      existing.connected = true;
+      existing.socketId = socket.id;
+      this.socketRoom.set(socket.id, room.code);
+      socket.join(room.code);
+      socket.emit("your_id", { playerId: existing.id });
+      this.broadcastState(room);
+      if (room.phase === "pools") {
+        if (existing.pool !== null) {
+          socket.emit("your_pool", { items: existing.pool });
+        }
+      }
+      if (room.phase === "playing") {
+        const currentRound = room.rounds[room.roundIndex];
+        if (currentRound !== undefined) {
+          socket.emit("round_start", {
+            index: room.roundIndex,
+            totalRounds: room.rounds.length,
+            item: currentRound.item,
+            targetTs: room.roundTargetTs,
+            ownerId: currentRound.ownerId,
+          });
+          if (currentRound.ownerId === existing.id) {
+            socket.emit("you_are_owner", { index: room.roundIndex });
           }
         }
-        return;
       }
+      return;
+    }
+
+    if (room.phase !== "lobby") {
       throw new RoomError("La partida ya ha empezado");
     }
 
@@ -191,8 +204,16 @@ export class RoomManager {
     if (player === undefined) return;
 
     if (room.phase === "lobby" || room.phase === "pools") {
-      this.releasePool(player);
-      room.players.delete(player.id);
+      if (room.phase === "lobby") {
+        // En lobby, eliminar al jugador completamente.
+        this.releasePool(player);
+        room.players.delete(player.id);
+      } else {
+        // En pools, marcar desconectado para permitir reconexión.
+        // No eliminamos al jugador porque puede estar subiendo archivos.
+        player.connected = false;
+        this.releaseDraft(player);
+      }
       this.promoteHost(room);
       if (!this.hasConnectedPlayers(room)) {
         this.destroy(room);
@@ -309,8 +330,6 @@ export class RoomManager {
     if (payload.roundIndex !== room.roundIndex) throw new RoomError("Esa ronda ya ha pasado");
     const round = room.rounds[room.roundIndex];
     if (round === undefined) throw new RoomError("La partida está acabando");
-    if (round.ownerId === player.id) throw new RoomError("¡Esa es tu foto! No puedes adivinarla");
-    if (payload.guessedPlayerId === player.id) throw new RoomError("No puedes elegirte a ti mismo");
     if (!room.players.has(payload.guessedPlayerId)) throw new RoomError("Jugador no encontrado");
     if (room.roundGuesses.has(player.id)) throw new RoomError("Ya has adivinado en esta ronda");
     const now = Date.now();
@@ -323,9 +342,7 @@ export class RoomManager {
     room.roundGuesses.set(player.id, { guessedId: payload.guessedPlayerId, points });
 
     // Si todos los jugadores elegibles ya han votado, cerramos la ronda con feedback visual
-    const eligibleVoters = [...room.players.values()].filter(
-      (p) => p.connected && p.id !== round.ownerId,
-    );
+    const eligibleVoters = [...room.players.values()].filter((p) => p.connected);
     if (eligibleVoters.length > 0 && room.roundGuesses.size >= eligibleVoters.length) {
       if (room.roundTimer !== null) {
         clearTimeout(room.roundTimer);
@@ -443,6 +460,15 @@ export class RoomManager {
     player.poolDraft = [];
   }
 
+  /** Libera solo el borrador no confirmado (poolDraft) de un jugador. */
+  private releaseDraft(player: ServerPlayer): void {
+    const ids = player.poolDraft.flatMap((item) =>
+      item === null || item === undefined ? [] : [item.id],
+    );
+    if (ids.length > 0) this.store.removeMany(ids);
+    player.poolDraft = [];
+  }
+
   private pickCode(): string {
     let code = "";
     do {
@@ -456,16 +482,16 @@ export class RoomManager {
 
   private tryStartGame(room: Room): void {
     if (room.phase !== "pools") return;
-    const active = [...room.players.values()].filter((p) => p.connected);
-    if (active.length < 2) return;
-    const allReady = active.every((p) => p.pool !== null && p.poolReady);
+    if (room.players.size < 2) return;
+    const all = [...room.players.values()];
+    const allReady = all.every((p) => p.connected && p.pool !== null && p.poolReady);
     if (!allReady) return;
-    const pools = new Map(active.map((p) => [p.id, p.pool ?? []]));
+    const pools = new Map(all.map((p) => [p.id, p.pool ?? []]));
     room.rounds = buildRounds(pools, room.config.rounds);
     if (room.rounds.length === 0) {
       // Sin esto los jugadores quedarían con poolReady=true y no podrían volver
       // a subir nada: sala bloqueada en `pools` para siempre.
-      for (const p of active) p.poolReady = false;
+      for (const p of all) p.poolReady = false;
       this.broadcastState(room);
       this.io.to(room.code).emit("error", { message: "No hay suficientes medios para jugar" });
       return;
@@ -490,6 +516,7 @@ export class RoomManager {
       totalRounds: room.rounds.length,
       item: round.item,
       targetTs: room.roundTargetTs,
+      ownerId: round.ownerId,
     });
     const owner = room.players.get(round.ownerId);
     if (owner !== undefined) {

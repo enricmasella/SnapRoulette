@@ -39,6 +39,7 @@ export const joinRoomPayloadSchema = z.object({
     .transform((value) => value.trim().toUpperCase()),
   name: z.string().min(1).max(20),
   avatar: z.string().min(1),
+  playerId: z.string().optional(),
 });
 export type JoinRoomPayload = z.infer<typeof joinRoomPayloadSchema>;
 
@@ -80,6 +81,7 @@ export const roundStartPayloadSchema = z.object({
   totalRounds: z.number().int().positive(),
   item: mediaItemSchema,
   targetTs: z.number(),
+  ownerId: z.string(),
 });
 export type RoundStartPayload = z.infer<typeof roundStartPayloadSchema>;
 

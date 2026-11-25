@@ -126,6 +126,14 @@ export function useSnapGame(): SnapGame {
   const [guestAvatar, setGuestAvatarState] = useState(loadGuestAvatar);
   const errorTimer = useRef<number | null>(null);
   const prevPhaseRef = useRef<string | null>(null);
+  const roomRef = useRef<RoomState | null>(null);
+  const myIdRef = useRef<string | null>(null);
+  const guestNameRef = useRef(guestName);
+  const guestAvatarRef = useRef(guestAvatar);
+  roomRef.current = room;
+  myIdRef.current = myId;
+  guestNameRef.current = guestName;
+  guestAvatarRef.current = guestAvatar;
 
   const showError = useCallback((message: string) => {
     setError(message);
@@ -135,7 +143,17 @@ export function useSnapGame(): SnapGame {
   }, []);
 
   useEffect(() => {
-    const onConnect = () => setConnected(true);
+    const onConnect = () => {
+      setConnected(true);
+      if (roomRef.current !== null && myIdRef.current !== null) {
+        socket.emit(EV.joinRoom, {
+          code: roomRef.current.code,
+          name: guestNameRef.current,
+          avatar: guestAvatarRef.current,
+          playerId: myIdRef.current,
+        });
+      }
+    };
     const onDisconnect = () => setConnected(false);
     const onYourId = (payload: { playerId: string }) => setMyId(payload.playerId);
     const onRoomState = (payload: RoomState) => {
@@ -162,15 +180,16 @@ export function useSnapGame(): SnapGame {
       totalRounds: number;
       item: MediaItem;
       targetTs: number;
+      ownerId: string;
     }) => {
+      setReveal(null);
       setRound({
         index: payload.index,
         total: payload.totalRounds,
         item: payload.item,
         targetTs: payload.targetTs,
-        isOwner: false,
+        isOwner: payload.ownerId === myIdRef.current,
       });
-      setReveal(null);
     };
     const onYouAreOwner = (payload: { index: number }) => {
       setRound((prev) =>
