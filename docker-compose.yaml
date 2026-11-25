@@ -6,4 +6,5 @@ services:
     environment:
       PORT: "3001"
       CORS_ORIGIN: "*"
+      TRUST_PROXY: "1"
     restart: unless-stopped
